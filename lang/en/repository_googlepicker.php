@@ -41,7 +41,6 @@ $string['drawingformat'] = 'Default drawing import format';
 $string['googledocs:view'] = 'View Google Drive repository';
 $string['importformat'] = 'Configure the default import formats from Google';
 $string['mydrive'] = 'My Drive';
-$string['pluginname'] = 'Google Drive';
 $string['presentationformat'] = 'Default presentation import format';
 $string['shareddrives'] = 'Shared Drives';
 $string['spreadsheetformat'] = 'Default spreadsheet import format';
