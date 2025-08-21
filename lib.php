@@ -22,6 +22,8 @@
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use core\session\exception;
+
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/repository/lib.php');
@@ -89,18 +91,52 @@ class repository_googlepicker extends repository_googledocs {
         }
     }
 
-    public function initialise_picker() {
+    public function initialise_picker($mimetypes = '') {
         global $PAGE;
 
-        $apikey = "AIzaSyAAloWvwWJGsv04ekOPJnVynO1yd_Fk8_0";
-
+        if(!$apikey = get_config('googlepicker', 'pickerapikey')) {
+            throw new exception(get_string('nopickerapikey', 'repository_googlepicker'));
+        };
+        
         $client = $this->get_user_oauth_client();
         $clientid = $client->get_clientid();
+        $appid = substr($clientid, 0, 12);
+
+        if(!$this->check_login()){
+            throw new exception("user not logged in");
+        }
+        if(!$token = $client->get_accesstoken()){
+            throw new exception("user doesnt have a token");
+        }
         $PAGE->requires->js(new moodle_url('https://apis.google.com/js/api.js'));
 
-        $PAGE->requires->js_call_amd('repository_googlepicker/picker', 'init', [$clientid, $apikey,'904320807611']);
+        $PAGE->requires->js_call_amd('repository_googlepicker/picker', 'init', [$token->token, $apikey, $appid, sesskey(), repository::get_secret_key(), $mimetypes]);
     }
 
+    
+    /**
+     * Get a cached user authenticated oauth client.
+     *
+     * @param moodle_url $overrideurl - Use this url instead of the repo callback.
+     * @return \core\oauth2\client
+     */
+    protected function get_user_oauth_client($overrideurl = false) {
+        if ($this->client) {
+            return $this->client;
+        }
+        if ($overrideurl) {
+            $returnurl = $overrideurl;
+        } else {
+            $returnurl = new moodle_url('/repository/repository_callback.php');
+            $returnurl->param('callback', 'yes');
+            $returnurl->param('repo_id', $this->id);
+            $returnurl->param('sesskey', sesskey());
+        }
+
+        $this->client = \core\oauth2\api::get_user_oauth_client($this->issuer, $returnurl, self::SCOPES, true);
+
+        return $this->client;
+    }
 
     /**
      * List the files and folders.
@@ -110,11 +146,28 @@ class repository_googlepicker extends repository_googledocs {
      * @return array of result.
      */
     public function get_listing($path='', $page = '') {
-            global $CFG;
-
-            $service = new repository_googlepicker\rest($this->get_user_oauth_client());
-
-            $srcurl = new moodle_url('/repository/googlepicker/picker.php', array('repoid' => $this->id, 'ctx' => $this->context->id));
+            $mimetypes = [];
+    
+            $mimetypearray = get_mimetypes_array();
+            if(!empty($this->options['mimetypes'])){
+                foreach($this->options['mimetypes'] as $ext) { 
+                    $mimeinfo = $mimetypearray[substr($ext, 1)];
+                    
+                    if($mimeinfo) {
+                        $mimetypes[] = $mimeinfo['type'];
+                    }
+                }
+                $mimetypestr = implode(',', $mimetypes);
+            }
+            
+            $srcurl = new moodle_url(
+                    '/repository/googlepicker/picker.php', 
+                    array(
+                        'repoid' => $this->id, 
+                        'ctx' => $this->context->id, 
+                        'mimetypes' => $mimetypestr
+                    )
+                );
 
             return [
                 'object' => [
@@ -277,6 +330,19 @@ class repository_googlepicker extends repository_googledocs {
         }
     }
 
+        /**
+     * Return names of the general options.
+     * By default: no general option name.
+     *
+     * @return array
+     */
+    public static function get_type_option_names() {
+        return array('issuerid', 'pluginname',
+            'pickerapikey', 'appid',
+            'documentformat', 'drawingformat',
+            'presentationformat', 'spreadsheetformat',
+            'defaultreturntype', 'supportedreturntypes');
+    }
 
 
     /**
@@ -749,7 +815,7 @@ class repository_googlepicker extends repository_googledocs {
 
         $mform->addElement('static', null, '', get_string('oauth2serviceslink', 'repository_googlepicker', $url));
 
-        parent::type_config_form($mform);
+        repository::type_config_form($mform);
         $options = [];
         $issuers = \core\oauth2\api::get_all_issuers();
 
@@ -758,6 +824,10 @@ class repository_googlepicker extends repository_googledocs {
         }
 
         $strrequired = get_string('required');
+
+        $mform->addElement('text', 'pickerapikey', get_string('pickerapikey', 'repository_googlepicker'));
+        $mform->addHelpButton('pickerapikey', 'pickerapikey', 'repository_googlepicker');
+        $mform->addRule('pickerapikey', $strrequired, 'required', null, 'client');
 
         $mform->addElement('select', 'issuerid', get_string('issuer', 'repository_googlepicker'), $options);
         $mform->addHelpButton('issuerid', 'issuer', 'repository_googlepicker');
@@ -840,7 +910,7 @@ class repository_googlepicker extends repository_googledocs {
  */
 function repository_googlepicker_oauth2_system_scopes(\core\oauth2\issuer $issuer) {
     if ($issuer->get('id') == get_config('googlepicker', 'issuerid')) {
-        return 'https://www.googleapis.com/auth/drive.file';
+        return 'https://www.googleapis.com/auth/drive';
     }
     return '';
 }

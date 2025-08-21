@@ -15,33 +15,25 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Google picker plugin
+ * Google Picker cache definitions
  *
  * @package     repository_googlepicker
+ * @category    access
  * @copyright   2025 Matthew<matthewfaulkner@apoaevents.com>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-use core\plugininfo\repository;
+$definitions = array(
 
-require_once('../../config.php');
-require_once('lib.php');
-
-$repoid = required_param('repoid',PARAM_INT);
-$ctx = required_param('ctx', PARAM_INT);
-$mimetypes = optional_param('mimetypes', '', PARAM_TEXT);
-require_login();
-
-$PAGE->set_url(new moodle_url('/repository/gpicker/picker.php'));
-$PAGE->set_context(context_system::instance());
-$PAGE->set_pagelayout('popup');
-
-echo $OUTPUT->header();
-
-$repo = new repository_googlepicker($repoid, $ctx);
-
-$repo->initialise_picker($mimetypes);
-
-$OUTPUT->single_button('', 'Open Picker', '');
-
-echo $OUTPUT->footer();
+    // Used to store file ids for folders.
+    // The keys used are full path to the folder, the values are the id in google drive.
+    // The static acceleration size has been based upon the depths of a single path.
+    'folder' => array(
+        'mode' => cache_store::MODE_APPLICATION,
+        'simplekeys' => false,
+        'simpledata' => true,
+        'staticacceleration' => true,
+        'staticaccelerationsize' => 10,
+        'canuselocalstore' => true
+    ),
+);

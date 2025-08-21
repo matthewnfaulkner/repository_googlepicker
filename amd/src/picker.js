@@ -21,74 +21,64 @@
  */
 
 /* global gapi, google */
-define(['core/log'], function(Log) {
+define(['core/log', 'core/str'], function(Log, String) {
     'use strict';
 
     /**
      * Initialise the Google Picker flow.
      *
-     * @param {string} clientid Google OAuth client ID.
+     * @param {string} token Google OAuth client ID.
      * @param {string} apikey Google API key.
      * @param {string} appid Google App ID (project number).
+     * @param {string} sesskey session key.
+     * @param {string} secret secret key.
+     * @param {string} mimetypes restrict to these mimetypes
      */
-    function init(clientid, apikey, appid) {
-        Log.debug(clientid, apikey, appid);
-        const CLIENT_ID = clientid;
+    function init(token, apikey, appid, sesskey, secret, mimetypes) {
         const API_KEY   = apikey;
         const APP_ID    = appid;
         const DEVELOPER_KEY = API_KEY;
+        const SESSKEY = sesskey;
+        const SECRET = secret;
+        const MIMETYPES = mimetypes;
 
-        let oauthToken = null;
+        let oauthToken = token;
         let pickerApiLoaded = false;
-
-        /**
-         * Called when the Google Auth API is loaded.
-         * Triggers authentication to retrieve OAuth token.
-         */
-        function onAuthApiLoad() {
-            Log.debug(CLIENT_ID);
-            gapi.auth.authorize(
-                {
-                    client_id: CLIENT_ID,
-                    scope: ['https://www.googleapis.com/auth/drive.file'],
-                    immediate: false
-                },
-                handleAuthResult
-            );
-        }
-
-        /**
-         * Callback from Google Auth with auth result.
-         *
-         * @param {Object} authResult The result returned by gapi.auth.authorize.
-         */
-        function handleAuthResult(authResult) {
-            if (authResult && !authResult.error) {
-                Log.debug(authResult);
-                oauthToken = authResult.access_token;
-                createPicker();
-            } else {
-                Log.debug('Google Picker auth failed: ' + JSON.stringify(authResult));
-            }
-        }
 
         /**
          * Called when the Google Picker API is loaded.
          */
         function onPickerApiLoad() {
             pickerApiLoaded = true;
+            createPicker();
+        }
+
+        /**
+         *
+         * @param {string} input
+         * @returns
+         */
+        async function sha1(input) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(input);
+            const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+            const hashArray= Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
         }
 
         /**
          * Builds and shows the Google File Picker.
          */
         function createPicker() {
-            Log.debug(pickerApiLoaded);
-            Log.debug(oauthToken);
             if (pickerApiLoaded && oauthToken) {
                 const view = new google.picker.DocsView()
                     .setIncludeFolders(true)
-                    .setSelectFolderEnabled(true);
+                    .setSelectFolderEnabled(false);
+
+                if(MIMETYPES){
+                    view.setMimeTypes(MIMETYPES);
+                }
 
                 const picker = new google.picker.PickerBuilder()
                     .enableFeature(google.picker.Feature.NAV_HIDDEN)
@@ -105,22 +95,46 @@ define(['core/log'], function(Log) {
         }
 
         /**
+         * Checks file mimetype is one of valid types.
+         *
+         * @param {string} mimeType
+         * @returns {boolean} whether mimetype is valid
+         */
+        function validateMimeType(mimeType) {
+            const mimeTypeArray = MIMETYPES.split(',').map(s => s.trim());
+            return mimeTypeArray.includes(mimeType);
+        }
+
+        /**
          * Callback when a file is picked.
          *
          * @param {Object} data Picker response data.
          */
         function pickerCallback(data) {
+
             if (data.action === google.picker.Action.PICKED) {
                 const doc = data.docs[0];
-                Log.debug('Picked file: ' + JSON.stringify(doc));
 
-                // TODO: Call Moodle filepicker API here, e.g.:
-                // window.parent.M.core_filepicker.select_file(doc);
+                if(!validateMimeType(doc.mimeType)) {
+                    return String.get_string("invalidfiletype", "repository_googlepicker")
+                        .done(function(s) {
+                            window.parent.M.core_filepicker.active_filepicker.display_error(s);
+                        });
+                }
+                doc.exportformat = 'download';
+                sha1(JSON.stringify(doc) + SECRET + SESSKEY).then(function(hash){
+                    var resource = {};
+                    resource.title = doc.name;
+                    resource.source = JSON.stringify(doc);
+                    resource.sourcekey = hash;
+                    resource.thumbnail = doc.iconUrl;
+                    resource.author = '';
+                    resource.license = "";
+                    window.parent.M.core_filepicker.select_file(resource);
+                });
             }
         }
 
-        // Load Google APIs
-        gapi.load('auth', {'callback': onAuthApiLoad});
         gapi.load('picker', {'callback': onPickerApiLoad});
     }
 
