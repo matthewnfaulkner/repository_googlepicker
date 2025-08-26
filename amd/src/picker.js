@@ -54,6 +54,7 @@ define(['core/log', 'core/str'], function(Log, String) {
         }
 
         /**
+         *  Performs hash on source for checksum
          *
          * @param {string} input
          * @returns
@@ -73,16 +74,16 @@ define(['core/log', 'core/str'], function(Log, String) {
         function createPicker() {
             if (pickerApiLoaded && oauthToken) {
                 const view = new google.picker.DocsView()
-                    .setIncludeFolders(true)
+                    .setIncludeFolders(false)
                     .setSelectFolderEnabled(false);
 
-                if(MIMETYPES){
+                if (MIMETYPES) {
                     view.setMimeTypes(MIMETYPES);
                 }
 
                 const picker = new google.picker.PickerBuilder()
                     .enableFeature(google.picker.Feature.NAV_HIDDEN)
-                    .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+                    .enableFeature(google.picker.Feature.MULTISELECT_DISABLED)
                     .setAppId(APP_ID)
                     .setOAuthToken(oauthToken)
                     .setDeveloperKey(DEVELOPER_KEY)
@@ -101,6 +102,11 @@ define(['core/log', 'core/str'], function(Log, String) {
          * @returns {boolean} whether mimetype is valid
          */
         function validateMimeType(mimeType) {
+
+            Log.debug(mimeType, MIMETYPES);
+            if (!MIMETYPES) {
+                return true;
+            }
             const mimeTypeArray = MIMETYPES.split(',').map(s => s.trim());
             return mimeTypeArray.includes(mimeType);
         }

@@ -97,7 +97,12 @@ class repository_googlepicker extends repository_googledocs {
         if(!$apikey = get_config('googlepicker', 'pickerapikey')) {
             throw new exception(get_string('nopickerapikey', 'repository_googlepicker'));
         };
+
         
+        if($mimetypes == "*"){
+            $mimetypes = null;
+        }
+
         $client = $this->get_user_oauth_client();
         $clientid = $client->get_clientid();
         $appid = substr($clientid, 0, 12);
