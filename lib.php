@@ -118,6 +118,14 @@ class repository_googlepicker extends repository_googledocs {
         $PAGE->requires->js_call_amd('repository_googlepicker/picker', 'init', [$token->token, $apikey, $appid, sesskey(), repository::get_secret_key(), $mimetypes]);
     }
 
+    /**
+     * Show the search screen, if required
+     *
+     * @return string
+     */
+    public function print_search() {
+        return "";
+    }
     
     /**
      * Get a cached user authenticated oauth client.
